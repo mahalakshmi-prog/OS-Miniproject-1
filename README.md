@@ -1,111 +1,102 @@
-# Multi-Container Runtime
+Multi-Container Runtime
+Overview
 
-A lightweight Linux container runtime in C with a long-running supervisor and a kernel-space memory monitor.
+This project implements a lightweight multi-container runtime system in C along with a Linux kernel module for monitoring container memory usage.
 
-Read [`project-guide.md`](project-guide.md) for the full project specification.
+The runtime allows users to start, list, and stop containers, while the kernel module continuously tracks memory usage and enforces limits.
 
----
+Aim
 
-## Getting Started
+To design and implement a basic container runtime that can manage multiple containers and integrate it with a Linux kernel module to monitor and control memory usage using soft and hard limits.
 
-### 1. Fork the Repository
+Tools & Technologies Used
+C Programming Language
+Linux Operating System (Ubuntu 22.04/24.04)
+Linux Kernel Module Development
+GCC Compiler
+Makefile
+System Calls (fork, exec, kill, etc.)
+VirtualBox
+Implementation
+1. Container Runtime (engine.c)
 
-1. Go to [github.com/shivangjhalani/OS-Jackfruit](https://github.com/shivangjhalani/OS-Jackfruit)
-2. Click **Fork** (top-right)
-3. Clone your fork:
+The user-space runtime provides a CLI interface with the following commands:
 
-```bash
-git clone https://github.com/<your-username>/OS-Jackfruit.git
-cd OS-Jackfruit
-```
+start → Starts a container
+ps → Lists all running containers
+stop → Stops a container
+Features:
+Uses fork() and exec() to create container processes
+Supports multiple containers simultaneously
+Tracks containers using PID
+Stores container information in a file
+Ensures proper cleanup of processes
+2. Kernel Module (monitor.c)
 
-### 2. Set Up Your VM
+The Linux kernel module monitors memory usage of containers.
 
-You need an **Ubuntu 22.04 or 24.04** VM with **Secure Boot OFF**. WSL will not work.
-
-Install dependencies:
-
-```bash
-sudo apt update
-sudo apt install -y build-essential linux-headers-$(uname -r)
-```
-
-### 3. Run the Environment Check
-
-```bash
-cd boilerplate
-chmod +x environment-check.sh
-sudo ./environment-check.sh
-```
-
-Fix any issues reported before moving on.
-
-### 4. Prepare the Root Filesystem
-
-```bash
-mkdir rootfs-base
-wget https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/x86_64/alpine-minirootfs-3.20.3-x86_64.tar.gz
-tar -xzf alpine-minirootfs-3.20.3-x86_64.tar.gz -C rootfs-base
-
-# Make one writable copy per container you plan to run
-cp -a ./rootfs-base ./rootfs-alpha
-cp -a ./rootfs-base ./rootfs-beta
-```
-
-Do not commit `rootfs-base/` or `rootfs-*` directories to your repository.
-
-### 5. Understand the Boilerplate
-
-The `boilerplate/` folder contains starter files:
-
-| File                   | Purpose                                             |
-| ---------------------- | --------------------------------------------------- |
-| `engine.c`             | User-space runtime and supervisor skeleton          |
-| `monitor.c`            | Kernel module skeleton                              |
-| `monitor_ioctl.h`      | Shared ioctl command definitions                    |
-| `Makefile`             | Build targets for both user-space and kernel module |
-| `cpu_hog.c`            | CPU-bound test workload                             |
-| `io_pulse.c`           | I/O-bound test workload                             |
-| `memory_hog.c`         | Memory-consuming test workload                      |
-| `environment-check.sh` | VM environment preflight check                      |
-
-Use these as your starting point. You are free to restructure the repository however you want — the submission requirements are listed in the project guide.
-
-### 6. Build and Verify
-
-```bash
-cd boilerplate
+Features:
+Tracks processes using PID
+Maintains a linked list of monitored containers
+Uses timer callbacks for periodic monitoring
+Implements:
+Soft limit → logs warning
+Hard limit → terminates process
+Uses ioctl for communication between user-space and kernel-space
+Ensures thread-safe operations using mutex
+3. Memory Monitoring Logic
+Memory usage (RSS) is calculated for each process
+If memory exceeds:
+Soft limit → warning logged
+Hard limit → process is terminated
+Monitoring is performed periodically using kernel timers
+Execution Steps
+Build the project
 make
-```
+Load kernel module
+sudo insmod monitor.ko
+Verify module
+lsmod | grep monitor
+Start containers
+sudo ./engine start c1 rootfs-base /bin/sh
+sudo ./engine start c2 rootfs-base /bin/sh
+List containers
+./engine ps
+Stop containers
+./engine stop c1
+./engine stop c2
+Remove module
+sudo rmmod monitor
+Screenshots
+Kernel module loaded
+<img width="753" height="71" alt="image" src="https://github.com/user-attachments/assets/edacd534-b405-4bb6-826d-16c5deddd7bd" />
 
-If this compiles without errors, your environment is ready.
 
-### 7. GitHub Actions Smoke Check
 
-Your fork will inherit a minimal GitHub Actions workflow from this repository.
+Container started
+<img width="753" height="142" alt="image" src="https://github.com/user-attachments/assets/326a4763-36a1-42fb-809c-e30eb977129a" />
 
-That workflow only performs CI-safe checks:
 
-- `make -C boilerplate ci`
-- user-space binary compilation (`engine`, `memory_hog`, `cpu_hog`, `io_pulse`)
-- `./boilerplate/engine` with no arguments must print usage and exit with a non-zero status
 
-The CI-safe build command is:
+Multiple containers running
+<img width="753" height="91" alt="image" src="https://github.com/user-attachments/assets/98111db8-b48e-40a2-8a75-151f7fb83b00" />
 
-```bash
-make -C boilerplate ci
-```
 
-This smoke check does not test kernel-module loading, supervisor runtime behavior, or container execution.
 
----
+Stopping containers
+<img width="753" height="50" alt="image" src="https://github.com/user-attachments/assets/5bbf54af-4c39-4a5f-bccb-45bdd5f33aa5" />
+<img width="753" height="62" alt="image" src="https://github.com/user-attachments/assets/94e58c69-3b8f-45d3-b7e0-39a256c5c644" />
 
-## What to Do Next
 
-Read [`project-guide.md`](project-guide.md) end to end. It contains:
+Final state
+<img width="753" height="110" alt="image" src="https://github.com/user-attachments/assets/29aec8b5-c425-48b7-93c6-16351c847c59" />
 
-- The six implementation tasks (multi-container runtime, CLI, logging, kernel monitor, scheduling experiments, cleanup)
-- The engineering analysis you must write
-- The exact submission requirements, including what your `README.md` must contain (screenshots, analysis, design decisions)
 
-Your fork's `README.md` should be replaced with your own project documentation as described in the submission package section of the project guide. (As in get rid of all the above content and replace with your README.md)
+
+Explanation
+
+This project demonstrates how user-space container management can be integrated with kernel-space monitoring. The runtime handles process lifecycle, while the kernel module ensures efficient resource control and enforcement.
+
+Conclusion
+
+This project successfully implements a basic multi-container runtime with kernel-level memory monitoring. It demonstrates key operating system concepts such as process management, kernel modules, memory tracking, and user-kernel interaction. The system is efficient, extensible, and provides a strong foundation for understanding container internals.
